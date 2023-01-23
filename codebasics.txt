@@ -1,0 +1,252 @@
+
+1- Provide the list of markets in which customer "Atliq Exclusive" operates its business in the APAC region.
+
+SELECT DISTINCT(market)
+FROM dim_customer
+WHERE customer = 'Atliq Exclusive' AND region = 'APAC';
+
+# market
+India
+Indonesia
+Japan
+Philiphines
+South Korea
+Australia
+Newzealand
+Bangladesh
+
+2- . What is the percentage of unique product increase in 2021 vs. 2020?
+
+WITH products_20 AS
+	(
+	SELECT
+		COUNT(DISTINCT product_code) AS unique_products_2020
+	FROM fact_sales_monthly
+	WHERE fiscal_year = 2020
+),
+products_21 AS
+	(
+	SELECT
+		COUNT(DISTINCT product_code) AS unique_products_2021
+	FROM fact_sales_monthly
+	WHERE fiscal_year = 2021
+)
+SELECT
+	products_20.unique_products_2020,
+	products_21.unique_products_2021,
+	Round(((products_21.unique_products_2021 - products_20.unique_products_2020) /
+products_20.unique_products_2020 * 100), 2) AS percentage_change
+
+FROM products_20
+JOIN products_21;
+
+# unique_products_2020	unique_products_2021	percentage_change
+	245			334			36.33
+
+3- Provide a report with all the unique product counts for each segment and
+sort them in descending order of product counts.
+
+SELECT
+segment,
+COUNT(DISTINCT product_code) AS product_count
+FROM dim_product
+GROUP BY segment
+ORDER BY 2 DESC;
+
+# segment	product_count
+Notebook	129
+Accessories	116
+Peripherals	84
+Desktop		32
+Storage		27
+Networking	9
+
+4- Follow-up: Which segment had the most increase in unique products in
+2021 vs 2020?
+
+WITH products_2020 AS
+	(
+	SELECT
+		p.segment,
+        		COUNT(DISTINCT p.product_code) AS unique_products_2020
+	FROM dim_product AS p
+	INNER JOIN fact_sales_monthly AS f
+	ON p.product_code = f.product_code
+	WHERE fiscal_year = 2020
+	GROUP BY segment
+),
+products_2021 AS
+	(
+	SELECT
+		p.segment,
+        		COUNT(DISTINCT p.product_code) AS unique_products_2021
+	FROM dim_product AS p
+	INNER JOIN fact_sales_monthly AS f
+	ON p.product_code = f.product_code
+	WHERE fiscal_year = 2021
+	GROUP BY segment
+)
+SELECT
+P20.segment,
+P20.unique_products_2020,
+P21.unique_products_2021,
+(p21.unique_products_2021 - p20.unique_products_2020) AS difference
+FROM products_2020 AS p20
+INNER JOIN products_2021 AS p21
+ON p20.segment = p21.segment
+ORDER BY 4 DESC;
+
+
+# segment	unique_products_2020	unique_products_2021	difference
+Accessories		69			103		34
+Notebook		92			108		16
+Peripherals		59			75		16
+Desktop			7			22		15
+Storage			12			17		5
+Networking		6			9		3
+
+5- Get the products that have the highest and lowest manufacturing costs.
+
+SELECT
+p.product_code,
+p.product,
+round(mc.manufacturing_cost, 2) AS manufacturing_cost
+FROM dim_product AS p
+JOIN fact_manufacturing_cost AS mc
+ON p.product_code = mc.product_code
+WHERE manufacturing_cost = (select max(manufacturing_cost) from fact_manufacturing_cost) OR manufacturing_cost = (select min(manufacturing_cost) from fact_manufacturing_cost);
+
+# product_code	product		manufacturing_cost
+A2118150101	AQ Master wired x1 Ms	0.89
+A6120110206	AQ HOME Allin1 Gen 2	240.54
+
+6- Generate a report which contains the top 5 customers who received an
+average high pre_invoice_discount_pct for the fiscal year 2021 and in the
+Indian market.
+
+# customer_code	customer	pre_invoice_discount_pct
+90002009	Flipkart	0.3083
+90002006	Viveks		0.3038
+90002003	Ezone		0.3028
+90002002	Croma		0.3025
+90002016	Amazon 		0.2933
+
+7- Get the complete report of the Gross sales amount for the customer “Atliq
+Exclusive” for each month.
+
+Select month(s.date) AS Month, year(s.date) AS Year, round(sum(s.sold_quantity * p.gross_price), 0) AS Gross_Sales_Amount 
+from fact_sales_monthly as s
+JOIN fact_gross_price AS p
+ON s.product_code = p.product_code
+JOIN dim_customer AS c
+ON s.customer_code = c.customer_code
+WHERE c.customer = 'Atliq Exclusive'
+GROUP BY Month, Year
+ORDER by Year;
+
+#Month	Year	Gross_Sales_Amount
+9	2019	9092670
+10	2019	10378638
+11	2019	15231895
+12	2019	9755795
+1	2020	9584952
+2	2020	8083996
+3	2020	766976
+4	2020	800072
+5	2020	1586964
+6	2020	3429737
+7	2020	5151815
+8	2020	5638282
+9	2020	19530271
+10	2020	21016218
+11	2020	32247290
+12	2020	20409063
+1	2021	19570702
+2	2021	15986604
+3	2021	19149625
+4	2021	11483530
+5	2021	19204309
+6	2021	15457580
+7	2021	19044969
+8	2021	11324548
+
+8- In which quarter of 2020, got the maximum total_sold_quantity? T
+
+SELECT
+CASE
+	WHEN date BETWEEN '2019-09-01' AND '2019-11-30' THEN 1
+	WHEN date BETWEEN '2019-12-01' AND '2020-02-29' THEN 2
+	WHEN date BETWEEN '2020-03-01' AND '2020-05-31' THEN 3
+	WHEN date BETWEEN '2020-06-01' AND '2020-08-31' THEN 4
+END AS Quarter,
+SUM(sold_quantity) AS Total_Sales_Quantiy
+FROM fact_sales_monthly
+WHERE fiscal_year = 2020
+GROUP BY Quarter
+LIMIT 1;
+
+# Quarter	Total_Sales_Quantiy
+1		7005619
+
+9- Which channel helped to bring more gross sales in the fiscal year 2021
+and the percentage of contribution?
+
+WITH sales_by_segment AS
+	(
+	Select
+    c.channel,
+    round(sum(f.sold_quantity * p.gross_price)/ 1000000, 2) AS gross_sales_mln
+	FROM fact_sales_monthly f
+	JOIN fact_gross_price p
+	ON p.product_code = f.product_code
+	JOIN dim_customer c
+	ON c.customer_code = f.customer_code
+	WHERE p.fiscal_year = 2021
+	GROUP BY 1
+)
+
+Select *,
+	round(gross_sales_mln / (Select sum(gross_sales_mln) from sales_by_segment) * 100, 2) AS percentage 
+FROM sales_by_segment
+ORDER by percentage DESC
+LIMIT 1;
+
+# channel     gross_sales_mln     percentage
+Retailer	1606.39             72.61
+
+10- Get the Top 3 products in each division that have a high
+total_sold_quantity in the fiscal_year 2021?
+
+WITH sales AS (
+select p.division, p.product_code, p.product, sum(f.sold_quantity) AS total_sold_quantity
+from dim_product AS p
+JOIN fact_sales_monthly AS f
+ON p.product_code = f.product_code
+where f.fiscal_year = 2021
+group by division, f.product_code, product
+),
+rank_ov AS(
+SELECT product_code,
+       total_sold_quantity,
+	   DENSE_RANK () OVER(PARTITION BY division ORDER BY total_sold_quantity desc) AS Rank_order
+FROM sales AS S)
+SELECT S.division,
+       S.product_code, 
+       S.product,
+       S.total_sold_quantity, 
+       Rank_order
+FROM sales AS S
+INNER JOIN rank_ov AS R
+ON R.product_code = S.product_code
+WHERE Rank_order BETWEEN 1 AND 3;
+
+# division	product_code	product			total_sold_quantity	variant		Rank_order
+N & S		A6720160103	AQ Pen Drive 2 IN 1	701373			Premium			1
+N & S		A6818160202	AQ Pen Drive DRC	688003			Plus			2
+N & S		A6819160203	AQ Pen Drive DRC	676245			Premium			3
+P & A		A2319150302	AQ Gamers Ms		428498			Standard 2		1
+P & A		A2520150501	AQ Maxima Ms		419865			Standard 1		2
+P & A		A2520150504	AQ Maxima Ms		419471			Plus 2			3
+PC		A4218110202	AQ Digit		17434			Standard Blue		1
+PC		A4319110306	AQ Velocity		17280			Plus Red		2
+PC		A4218110208	AQ Digit		17275			Premium Misty Green	3
