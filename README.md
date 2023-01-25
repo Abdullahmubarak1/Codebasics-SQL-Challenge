@@ -1,1 +1,1 @@
-# codebasics---Atliq-Hardware
+# codebasics---Atliq-Hardware - SQL Queries
